@@ -1,0 +1,378 @@
+---
+title: "Project 2"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+
+<p>##Introduction</p>
+<p>The dataset I will be using in this project is called ‘melanoma’ and it contains the information for 205 people who were diagnosed with malignant melanoma and had their tumor removed by surgery. The data tells us the survival time in days since the operation (‘time’), whether they died from melanoma, died from something else, or survived (‘status’), the sex of the patient (‘sex’), the age of the patient (‘age’), the year the operation took place (‘year’), the thickness of the tumor (‘thickness’), and whether or not the tumor contained ulcers (‘ulcer’)</p>
+<p>For ‘status’: 1=died from melanoma; 2=still alive; 3=died from some other cause</p>
+<p>For ‘sex’: 1=male; 0=female</p>
+<p>For ‘ulcer’: 1=present; 0=absent</p>
+<pre class="r"><code>library(boot)
+melanoma&lt;-melanoma</code></pre>
+<p>##MANOVA</p>
+<p>There are loads of assumptions in a MANOVA that are very hard to meet (multivariate normality of variables, homogeneity of within-group covariance matrices, no multicollinearity, etc.), so it is likely that we didn’t meet all of them, but we will still proceed. First, I ran the MANOVA to test whether time, age, or thickness differ by patient status. The p-value obtained was &lt;0.05, so we know that at least one of the groups differs.</p>
+<pre class="r"><code>library(tidyverse)
+man1 &lt;- manova(cbind(time,age,thickness)~status, data=melanoma)
+summary(man1)</code></pre>
+<pre><code>## Df Pillai approx F num Df den Df Pr(&gt;F)
+## status 1 0.13719 10.653 3 201 1.571e-06 ***
+## Residuals 203
+## ---
+## Signif. codes: 0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1
+&#39; &#39; 1</code></pre>
+<p>
+ 
+</p>
+<p>I then ran univariate ANOVAs for each variable, and found that time and thickness significantly differ by patient status, but age does not.</p>
+<pre class="r"><code>summary.aov(man1)</code></pre>
+<pre><code>## Response time :
+## Df Sum Sq Mean Sq F value Pr(&gt;F)
+## status 1 25670731 25670731 22.543 3.878e-06 ***
+## Residuals 203 231169377 1138765
+## ---
+## Signif. codes: 0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1
+&#39; &#39; 1
+##
+## Response age :
+## Df Sum Sq Mean Sq F value Pr(&gt;F)
+## status 1 14 14.45 0.0517 0.8203
+## Residuals 203 56687 279.24
+##
+## Response thickness :
+## Df Sum Sq Mean Sq F value Pr(&gt;F)
+## status 1 74.88 74.881 8.8801 0.003235 **
+## Residuals 203 1711.80 8.433
+## ---
+## Signif. codes: 0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1
+&#39; &#39; 1</code></pre>
+<p>
+ 
+</p>
+<p>To test which specific statuses differ, I ran post hoc t-tests for these two variables. I found that the time a patient stays alive post-surgery is significantly different between groups 1 and 2, and groups 2 and 3, but not groups 1 and 3. Thickness of the tumor only differed between groups 1 and 2.</p>
+<pre class="r"><code>melanoma %&gt;% group_by(status) %&gt;% summarize(mean(time),mean(age),mean(thickness))</code></pre>
+<pre><code>## # A tibble: 3 x 4
+##   status `mean(time)` `mean(age)` `mean(thickness)`
+##    &lt;dbl&gt;        &lt;dbl&gt;       &lt;dbl&gt;             &lt;dbl&gt;
+## 1      1        1253.        55.1              4.31
+## 2      2        2621.        50.0              2.24
+## 3      3        1338.        65.3              3.72</code></pre>
+<pre class="r"><code>pairwise.t.test(melanoma$time,melanoma$status, p.adj=&quot;none&quot;)</code></pre>
+<pre><code>## 
+##  Pairwise comparisons using t tests with pooled SD 
+## 
+## data:  melanoma$time and melanoma$status 
+## 
+##   1       2      
+## 2 &lt; 2e-16 -      
+## 3 0.76    1.6e-06
+## 
+## P value adjustment method: none</code></pre>
+<pre class="r"><code>pairwise.t.test(melanoma$thickness,melanoma$status, p.adj=&quot;none&quot;)</code></pre>
+<pre><code>## 
+##  Pairwise comparisons using t tests with pooled SD 
+## 
+## data:  melanoma$thickness and melanoma$status 
+## 
+##   1       2    
+## 2 6.4e-06 -    
+## 3 0.481   0.064
+## 
+## P value adjustment method: none</code></pre>
+<p>
+ 
+</p>
+<p>All together I ran 10 different tests to get to this conclusion, which means that my probability of at least one type I error is about 40%. To adjust for this, I would use an alpha of 0.005 instead of 0.05. Using this new alpha, all of my significant test results still remain significant.</p>
+<pre class="r"><code>1-0.95^10</code></pre>
+<pre><code>## [1] 0.4012631</code></pre>
+<pre class="r"><code>0.05/10</code></pre>
+<pre><code>## [1] 0.005</code></pre>
+<p>##Randomization Test</p>
+<p>I ran a randomization test to see whether there was a difference in tumor thickness between males and females.</p>
+<p><em>Null hypothesis: Mean tumor thickness is the same for males and females</em>
+<em>Alternative Hypothesis: Mean tumor thickness is not the same for males and females</em></p>
+<pre class="r"><code>male &lt;- melanoma %&gt;% filter(sex==1) %&gt;% select(thickness) %&gt;% unlist(melanoma[1,])
+female &lt;- melanoma %&gt;% filter(sex==0) %&gt;% select(thickness) %&gt;% unlist(melanoma[1,])
+
+mel&lt;-data.frame(sex=c(rep(&quot;male&quot;,79),rep(&quot;female&quot;,126)),thickness=c(male,female))
+
+ggplot(mel,aes(thickness,fill=sex))+geom_histogram(bins=6.5)+facet_wrap(~sex,ncol=2)+theme(legend.position=&quot;none&quot;)</code></pre>
+<p><img src="/project2_files/figure-html/unnamed-chunk-6-1.png" width="768" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>mel%&gt;%group_by(sex)%&gt;%
+  summarize(means=mean(thickness))%&gt;%summarize(`mean_diff:`=diff(means))</code></pre>
+<pre><code>## # A tibble: 1 x 1
+##   `mean_diff:`
+##          &lt;dbl&gt;
+## 1         1.12</code></pre>
+<pre class="r"><code>rand_dist&lt;-vector()
+
+for(i in 1:5000){
+new&lt;-data.frame(thickness=sample(mel$thickness),sex=mel$sex) 
+rand_dist[i]&lt;-mean(new[new$sex==&quot;male&quot;,]$thickness)-
+              mean(new[new$sex==&quot;female&quot;,]$thickness)}
+
+{hist(rand_dist,main=&quot;&quot;,ylab=&quot;&quot;); abline(v = 1.124711,col=&quot;red&quot;)}</code></pre>
+<p><img src="/project2_files/figure-html/unnamed-chunk-6-2.png" width="768" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>mean(rand_dist&gt;1.124711)*2</code></pre>
+<pre><code>## [1] 0.008</code></pre>
+<p>A p-value &lt; 0.05 tells us that we can reject the null hypothesis. The mean tumor thickness significantly differs between males and females.</p>
+<p>##Linear Regression</p>
+<p>This linear regression model will be predicting the length of time a patient survives after surgery, from their age and the thickness of their tumor</p>
+<pre class="r"><code>melanoma$thickness_c &lt;- melanoma$thickness - mean(melanoma$thickness)
+melanoma$age_c &lt;- melanoma$age - mean(melanoma$age)
+fit_reg&lt;-lm(time ~ thickness_c*age_c, data=melanoma)</code></pre>
+<p>
+ 
+</p>
+<p>As we can see from these coefficients, a person of average tumor thickness and average age is expected to live for about 2172 days after surgery. When controlling for thickness, the amount of time a patient lives after surgery decreases by 17.5 days for each year that they are above the average age. When controlling for age, the amount of time a patient lives after surgery decreases by 55.8 days for every mm that their tumor is above the average. The interaction term tells us that thickness has a slightly less effect on time as age increases.</p>
+<pre class="r"><code>summary(fit_reg)</code></pre>
+<pre><code>##
+## Call:
+## lm(formula = time ~ thickness_c * age_c, data =
+melanoma)
+##
+## Residuals:
+## Min 1Q Median 3Q Max
+## -2392.6 -586.7 -100.5 759.4 3191.8
+##
+## Coefficients:
+## Estimate Std. Error t value Pr(&gt;|t|)
+## (Intercept) 2171.872 75.481 28.774 &lt; 2e-16 ***
+## thickness_c -55.816 27.572 -2.024 0.044255 *
+## age_c -17.506 4.541 -3.855 0.000156 ***
+## thickness_c:age_c -1.828 1.547 -1.182 0.238568
+## ---
+## Signif. codes: 0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1
+&#39; &#39; 1
+##
+## Residual standard error: 1056 on 201 degrees of freedom
+## Multiple R-squared: 0.1277, Adjusted R-squared: 0.1147
+## F-statistic: 9.81 on 3 and 201 DF, p-value: 4.55e-06</code></pre>
+<p>
+ 
+</p>
+<p>When plotting the linear regression model, we can see that both age and thickness have a linear relationship with time. The assumption of linearity is met.</p>
+<pre class="r"><code>melanoma%&gt;%ggplot(aes(age_c,time))+geom_point()+geom_smooth(method = &#39;lm&#39;,se=F)</code></pre>
+<p><img src="/project2_files/figure-html/unnamed-chunk-9-1.png" width="768" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>melanoma%&gt;%ggplot(aes(thickness_c,time))+geom_point()+geom_smooth(method = &#39;lm&#39;,se=F)</code></pre>
+<p><img src="/project2_files/figure-html/unnamed-chunk-10-1.png" width="768" style="display: block; margin: auto;" /></p>
+<p>
+ 
+</p>
+<p>To test the assumption of homoskedasticity, I ran a Breuch-Pagan test on the linear regression model. I obtained a p-value &lt; 0.05, which means that we can reject the null hypothesis that our model is homoskedastic. This is also clearly illustrated by the plot below. The assumption of homoskedasticity is not met.</p>
+<pre class="r"><code>library(sandwich)
+library(lmtest)
+resids&lt;-fit_reg$residuals
+fitvals&lt;-fit_reg$fitted.values
+bptest(fit_reg)</code></pre>
+<pre><code>## 
+##  studentized Breusch-Pagan test
+## 
+## data:  fit_reg
+## BP = 21.529, df = 3, p-value = 8.175e-05</code></pre>
+<pre class="r"><code>ggplot()+geom_point(aes(fitvals,resids))+geom_hline(yintercept=0, color=&#39;red&#39;)</code></pre>
+<p><img src="/project2_files/figure-html/unnamed-chunk-11-1.png" width="768" style="display: block; margin: auto;" /></p>
+<p>
+ 
+</p>
+<p>To test the assumption of normality, I ran both a Kolmogorov-Smirnov (KS) test and a Shapiro-Wilk test. Both of these tests came out with p-values &gt; 0.05 which means that we fail to reject the null hypothesis of normality. This is also illustrated in the plots below. The assumption of normality is met.*</p>
+<pre class="r"><code>ks.test(resids, &quot;pnorm&quot;, mean=0, sd(resids))</code></pre>
+<pre><code>## 
+##  One-sample Kolmogorov-Smirnov test
+## 
+## data:  resids
+## D = 0.061857, p-value = 0.4128
+## alternative hypothesis: two-sided</code></pre>
+<pre class="r"><code>shapiro.test(resids) </code></pre>
+<pre><code>## 
+##  Shapiro-Wilk normality test
+## 
+## data:  resids
+## W = 0.99209, p-value = 0.3335</code></pre>
+<pre class="r"><code>ggplot()+geom_histogram(aes(resids), bins=20)</code></pre>
+<p><img src="/project2_files/figure-html/unnamed-chunk-12-1.png" width="768" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>ggplot()+geom_qq(aes(sample=resids))+geom_qq_line(aes(sample=resids))</code></pre>
+<p><img src="/project2_files/figure-html/unnamed-chunk-12-2.png" width="768" style="display: block; margin: auto;" /></p>
+<p>
+ 
+</p>
+<p>When recomputing the regression with robust standard errors, thickness is no longer a significant predictor of time. The standard error of thickness in the model using the robust standard error was much greater than that of the original regression. However, age is still a significant predictor of time.</p>
+<pre class="r"><code>coeftest(fit_reg, vcov = vcovHC(fit_reg))</code></pre>
+<pre><code>##
+## t test of coefficients:
+##
+## Estimate Std. Error t value Pr(&gt;|t|)
+## (Intercept) 2171.8721 80.8215 26.8725 &lt; 2.2e-16 ***
+## thickness_c -55.8155 35.0496 -1.5925 0.1128500
+## age_c -17.5056 4.9482 -3.5378 0.0005011 ***
+## thickness_c:age_c -1.8282 1.7829 -1.0254 0.3063997
+## ---
+## Signif. codes: 0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1
+&#39; &#39; 1</code></pre>
+<p>Using the adjusted R-squared value, we know that this model explains about 11.5% of the variation.</p>
+<p>
+ 
+</p>
+<p>Upon running the regression model with bootstrapped standard errors, we can see that the bootstrapped standard errors and the robust standard errors were very similar, while the original standard errors were much lower. This makes sense because bootstrapping removes the need for any assumptions, since we are basically taking random samples from the dataset, and robust standard errors penalize you for the addition of statistical noise. We would expect both of these to be more accurate and use a greater standard error than the original regression.</p>
+<pre class="r"><code>samp_distn&lt;-replicate(5000, {
+  boot_dat&lt;-melanoma[sample(nrow(melanoma),replace=TRUE),]
+  fit_boot&lt;-lm(time~thickness_c*age_c,data=boot_dat) 
+  coef(fit_boot)
+})
+
+samp_distn%&gt;%t%&gt;%as.data.frame%&gt;%summarize_all(sd)</code></pre>
+<pre><code>##   (Intercept) thickness_c    age_c thickness_c:age_c
+## 1    80.02113    33.93576 4.861357          1.806062</code></pre>
+<p>##Logistic Regression</p>
+<p>I ran a logistic regression predicting whether or not a patient had ulcers on their tumor, from thickness of the tumor and post-surgery survival time.</p>
+<p>It turns out that both thickness and time are significant measures in determining whether a patient had an ulcer or not. For a patient with average thickness and average survival time, the odds of them having an ulcer is 0.86. For every 1 mm increase in thickness, the odds of having an ulcer increase by a factor of 1.54 when controlling for time. For each extra day of survival above the average, the odds of of having an ulcer decrease by a factor of 0.99 when controlling for thickness.</p>
+<pre class="r"><code>melanoma$time_c &lt;- melanoma$time - mean(melanoma$time)
+fit_log&lt;-glm(ulcer~thickness_c+time_c,data=melanoma,family=&quot;binomial&quot;)
+coeftest(fit_log)</code></pre>
+<pre><code>##
+## z test of coefficients:
+##
+## Estimate Std. Error z value Pr(&gt;|z|)
+## (Intercept) -0.15180427 0.16620022 -0.9134 0.361042
+## thickness_c 0.42945073 0.08698467 4.9371 7.93e-07 ***
+## time_c -0.00039883 0.00015416 -2.5871 0.009679 **
+## ---
+## Signif. codes: 0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1
+&#39; &#39; 1</code></pre>
+<pre class="r"><code>exp(coef(fit_log))</code></pre>
+<pre><code>## (Intercept) thickness_c      time_c 
+##   0.8591564   1.5364134   0.9996013</code></pre>
+<pre class="r"><code>melanoma$prob&lt;-predict(fit_log,type=&quot;response&quot;) 
+melanoma$predicted&lt;-ifelse(melanoma$prob&gt;.5,&quot;1&quot;,&quot;0&quot;) 
+
+melanoma$logit&lt;-predict(fit_log) 
+melanoma$outcome&lt;-factor(melanoma$ulcer,levels=c(&quot;1&quot;,&quot;0&quot;))
+
+table(truth=melanoma$outcome, prediction=melanoma$predicted)%&gt;%addmargins</code></pre>
+<pre><code>##      prediction
+## truth   0   1 Sum
+##   1    37  53  90
+##   0   100  15 115
+##   Sum 137  68 205</code></pre>
+<p>Accuracy:</p>
+<pre class="r"><code>(100+53)/205 </code></pre>
+<pre><code>## [1] 0.7463415</code></pre>
+<p>Sensitivity (TPR):</p>
+<pre class="r"><code>53/90 </code></pre>
+<pre><code>## [1] 0.5888889</code></pre>
+<p>Specificity (TNR):</p>
+<pre class="r"><code>100/115 </code></pre>
+<pre><code>## [1] 0.8695652</code></pre>
+<p>Recall (PPV):</p>
+<pre class="r"><code>53/68 </code></pre>
+<pre><code>## [1] 0.7794118</code></pre>
+<p>Although the model has relatively good accuracy, specificity, and recall, the sensitivity of our model is not very good at all.</p>
+<pre class="r"><code>ggplot(melanoma,aes(logit, fill=outcome))+geom_density(alpha=.3)+
+  geom_vline(xintercept=0,lty=2)</code></pre>
+<p><img src="/project2_files/figure-html/unnamed-chunk-21-1.png" width="768" style="display: block; margin: auto;" /></p>
+<p>
+ 
+</p>
+<p>A way that we can interpret the AUC is that 81.7% of the time, a randomly selected patient who had ulcers will have a higher predicted probability from the model than a randomly selected patient who didn’t have ulcers.</p>
+<pre class="r"><code>library(plotROC)
+ROCplot&lt;-ggplot(melanoma)+geom_roc(aes(d=ulcer,m=prob), n.cuts=0)
+ROCplot</code></pre>
+<p><img src="/project2_files/figure-html/unnamed-chunk-22-1.png" width="768" style="display: block; margin: auto;" /></p>
+<pre class="r"><code>calc_auc(ROCplot)</code></pre>
+<pre><code>##   PANEL group       AUC
+## 1     1    -1 0.8171014</code></pre>
+<p>
+ 
+</p>
+<p>When performing a 10-fold cross validation on the model, we obtain an AUC that is very similar to the original AUC, which means that our model is not overfitting very much at all. The values for accuracy, sensitivity, and recall were very similar as well.</p>
+<pre class="r"><code>## GIVE IT PREDICTED PROBS AND TRUTH LABELS, RETURNS VARIOUS DIAGNOSTICS
+class_diag &lt;- function(probs,truth){
+#CONFUSION MATRIX: CALCULATE ACCURACY, TPR, TNR, PPV
+tab&lt;-table(factor(probs&gt;.5,levels=c(&quot;FALSE&quot;,&quot;TRUE&quot;)),truth)
+acc=sum(diag(tab))/sum(tab)
+sens=tab[2,2]/colSums(tab)[2]
+spec=tab[1,1]/colSums(tab)[1]
+ppv=tab[2,2]/rowSums(tab)[2]
+if(is.numeric(truth)==FALSE &amp; is.logical(truth)==FALSE) truth&lt;-as.numeric(truth)-1
+#CALCULATE EXACT AUC
+ord&lt;-order(probs, decreasing=TRUE)
+probs &lt;- probs[ord]; truth &lt;- truth[ord]
+TPR=cumsum(truth)/max(1,sum(truth))
+FPR=cumsum(!truth)/max(1,sum(!truth))
+dup&lt;-c(probs[-1]&gt;=probs[-length(probs)], FALSE)
+TPR&lt;-c(0,TPR[!dup],1); FPR&lt;-c(0,FPR[!dup],1)
+n &lt;- length(TPR)
+auc&lt;- sum( ((TPR[-1]+TPR[-n])/2) * (FPR[-1]-FPR[-n]) )
+data.frame(acc,sens,spec,ppv,auc)
+}
+
+set.seed(1234)
+k=10 #choose number of folds
+data&lt;-melanoma[sample(nrow(melanoma)),] #randomly order rows
+folds&lt;-cut(seq(1:nrow(melanoma)),breaks=k,labels=F) #create folds
+diags&lt;-NULL
+for(i in 1:k){
+## Create training and test sets
+train&lt;-data[folds!=i,]
+test&lt;-data[folds==i,]
+truth&lt;-test$ulcer ## Truth labels for fold i
+## Train model on training set (all but fold i)
+fitfin&lt;-glm(ulcer~thickness+time,data=train,family=&quot;binomial&quot;)
+## Test model on test set (fold i)
+probs&lt;-predict(fitfin,newdata = test,type=&quot;response&quot;)
+## Get diagnostics for fold i
+diags&lt;-rbind(diags,class_diag(probs,truth))
+}
+
+summarize_all(diags,mean) </code></pre>
+<pre><code>##         acc      sens      spec       ppv       auc
+## 1 0.7507143 0.6065657 0.8695288 0.7947222 0.8152049</code></pre>
+<p>##LASSO Regression</p>
+<p>*When running a LASSO regression, we see that the variables that sufficiently predict whether or not a patient had ulcers are time, status, and thickness. I then performed a 10-fold cross validation using this model. It turns out that this model actually gives us a higher accuracy than before. This makes sense because the LASSO regression tries to get rid of noisy variables so that we only include those that will be good predictors.</p>
+<pre class="r"><code>melanoma$outcome &lt;- NULL
+
+library(glmnet)
+y&lt;-as.matrix(melanoma$ulcer)
+x&lt;-melanoma%&gt;%dplyr::select(-ulcer,-thickness_c,-age_c,-prob,-predicted,-logit,-time_c)%&gt;%mutate_all(scale)%&gt;%as.matrix
+
+cv&lt;-cv.glmnet(x,y) #this picks an optimal value for lambda (smallest MSE) via 10-fold CV
+
+lasso1&lt;-glmnet(x,y,lambda=cv$lambda.1se)
+coef(lasso1)</code></pre>
+<pre><code>## 7 x 1 sparse Matrix of class &quot;dgCMatrix&quot;
+##                       s0
+## (Intercept)  0.439024390
+## time        -0.002405673
+## status      -0.011300265
+## sex          .          
+## age          .          
+## year         .          
+## thickness    0.107962825</code></pre>
+<pre class="r"><code>set.seed(1234)
+k=10 #choose number of folds
+
+data1&lt;-melanoma[sample(nrow(melanoma)),] #randomly order rows
+folds&lt;-cut(seq(1:nrow(melanoma)),breaks=k,labels=F) #create folds
+
+diags&lt;-NULL
+for(i in 1:k){
+  ## Create training and test sets
+  train&lt;-data1[folds!=i,] 
+  test&lt;-data1[folds==i,]
+  truth&lt;-test$ulcer
+  
+  ## Train model on training set
+  fit2&lt;-glm(ulcer~time+status+thickness,data=train,family=&quot;binomial&quot;)
+  probs&lt;-predict(fit2,newdata = test,type=&quot;response&quot;)
+  
+  ## Test model on test set (save all k results)
+  diags&lt;-rbind(diags,class_diag(probs,truth))
+}
+
+diags%&gt;%summarize_all(mean)</code></pre>
+<pre><code>##         acc      sens      spec       ppv       auc
+## 1 0.7461905 0.6274423 0.8451698 0.7662698 0.7997366</code></pre>

@@ -1,0 +1,193 @@
+---
+title: "NBA Statistics"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r}
+library(fivethirtyeight)
+library(tidyverse)
+library(ggplot2)
+library(cluster)
+
+tat <-nba_tattoos
+draft <- nba_draft_2015
+```
+
+
+For this project, I chose two datasets from the fivethirtyeight r package. My first dataset is called 'nba_tattoos' and it contains the names of 636  NBA players and whether or not they have tattoos on their bodies. The other dataset is called 'nba_draft_2015' and it contains the names of players that have been selected in the NBA draft from 2001 to 2015. It also contains statistics about the projected success of the players at the time, giving the probababilites that each player would become a superstar, a starter, a role player, and a bust. It also gives their projected plus/minus (spm) for the first few years of each player's career, which is essentially a statistic that tells you how effective that player is on the court. I decided to go with these datasets because basketball is my favorite sport and I follow the NBA very closely. I dont have any predictions going into this, but I'm excited to see if there are any associations relating projected skill level and tattoos.
+
+
+```{r}
+tat <- tat %>% pivot_wider(names_from = 'player_name',values_from = 'tattoos')
+tat <- tat %>% pivot_longer(1:636, names_to = 'player_name', values_to = 'tattoos')
+
+draft <- draft %>% pivot_wider(names_from = 'position', values_from = 'projected_spm')
+draft <-draft %>% pivot_longer(8:12, names_to = 'position', values_to = 'projected_spm') %>% 
+  na.omit() %>% select(player, position, everything())
+```
+
+
+The datasets that I am using were already in a tidy format, so I decided to untidy them, and then tidy them again. For the 'tat' dataset, I used pivot_wider() to give each player their own column, and then used pivot_longer() to lengthen the dataset to its original format. For the 'draft' dataset, I used pivot_wider() to make a column for each position. Doing this created a lot of NAs, so when tidying the dataset, I had to use na.omit() to get rid of the NAs, and select() to rearrange my columns to the order they were in originally.
+
+
+```{r}
+tatdraft <- inner_join(draft,tat,by=c('player'='player_name'))
+```
+
+
+My overall goal of this project is to see whether there is a relationship between having a tattoo and projected skill level. Because of this, I decided to use inner_join(), which keeps only the basketball players that appear in both datasets. Doing any other type of join would make no sense, because it would leave me with a combined dataset that contains players that I either don't know their projected skill level, or don't know whether or not they have tattoos. Doing this join got rid of 937 obervations, and left me with 396 observations, which is still a good size for this analysis.
+
+
+```{r}
+tatdraft %>% filter(position == 'SG' & projected_spm > 1) %>% arrange(desc(projected_spm))
+
+tatdraft %>% mutate(years_ex = 2020-draft_year) %>% select(1,5:11)
+
+tatdraft %>% group_by(tattoos) %>% summarize(mean_spm = mean(projected_spm)) 
+```
+
+
+In this section, I used the filter and arrange functions to find out which shooting guards had projected spm's of over 1. I found that the only two players in this dataset that met this criteria were Victor Oladipo and Bradley Beal, which makes sense considering they currently are both doing very well in the NBA. Next, I created another variable called 'years_ex' which tells us how many years each player has been in the NBA. I also grouped by 'tattoos' and found the mean spm value for each group to see if there is a difference in prospective talent among people that have tattoos and people that don't. It turns out that people who have tattoos have a slight edge in mean spm value, but not by very much at all.
+
+
+```{r}
+#superstar
+tatdraft %>% summarize(mean(superstar))
+tatdraft %>% group_by(position) %>% summarize(mean(superstar))
+
+
+#projected_spm
+tatdraft %>% summarize(var(projected_spm))
+tatdraft %>% group_by(draft_year,position) %>% summarize(sd_spm=sd(projected_spm)) %>% 
+  na.omit() %>% arrange(desc(sd_spm))
+
+
+#draft_year
+tatdraft %>% summarize(n_distinct(draft_year))
+tatdraft %>% group_by(tattoos) %>% summarize(n_distinct(draft_year))
+
+
+#starter
+tatdraft %>% summarize(min(starter))
+tatdraft %>% summarize(max(starter))
+tatdraft %>% group_by(position) %>% summarize(min(starter))
+
+
+#role_player
+tatdraft %>% summarize(mad(role_player))
+tatdraft %>% group_by(draft_year) %>% summarize(mad(role_player))
+  
+
+#bust
+tatdraft %>% summarize(IQR(bust))
+tatdraft %>% group_by(position,draft_year) %>% summarize(IQR(bust))
+
+
+tatdraft %>% group_by(tattoos) %>% summarize(n()) 
+
+
+#matrix
+tatdraft %>% select_if(is.numeric) %>% na.omit %>% cor
+```
+
+
+There were a few interesting things I found within my summary statistics. I found that point guards and shooting guards were more likely to become superstars, while centers were the least likely. I found that centers in 2003 had the highest variance in projected spm for the beginning of their careers. Another statistic that I found about 2003 was that it was the year that had the highest IQR for the probability that a player would become a bust. This analysis shows that overall, 2003 was the draft class that was most variable in skill level.
+
+The most interesting observation I found in my correlation matrix is that there is a greater positive correlation between 'projected_spm' and 'starter' than 'projected_spm' and 'superstar'. This is something that I did not expect at all. You would think that as a player's projected spm increases, their liklihood of becoming a superstar would be the most correlated statistic. This shows us that the players that are projected to be superstars don't neccessarily have the highest projected spm.
+
+
+```{r}
+tatdraft_cor <- tatdraft %>% select_if(is.numeric) %>% na.omit %>% cor %>%
+  as.data.frame() %>% rownames_to_column() %>%
+  pivot_longer(-1, names_to = 'name', values_to = 'correlation')
+
+tatdraft_cor %>% ggplot(aes(rowname, name, fill=correlation)) + geom_tile() +
+  scale_fill_gradient2(low="red",mid="white",high="blue") +
+  geom_text(aes(label=round(correlation,2)),color = "black", size = 4) +
+  theme(axis.text.x = element_text(angle = 90, hjust=1)) +
+  xlab("")+ylab("")
+```
+
+
+This correlation heatmap shows us that projected spm is positively correlated with starter and superstar, but negatively correlated with role player and bust, which is exactly what you would expect. An interesting interaction that I didnt expect is that draft year has a slight positive correlation with role player and bust, and a slight negative correlation with starter and superstar. This means that as time has passed, players have been increasingly projected to not be successful in the NBA. 
+
+
+```{r}
+tatdraft %>% group_by(position,tattoos) %>% 
+  summarize(avg_super = mean(superstar),sd_super=sd(superstar, na.rm=T), n=n(),
+se_super=sd_super/sqrt(n)) %>%
+  ggplot(aes(position, avg_super, fill=position)) +
+  geom_bar(stat='summary',show.legend = F) +
+  geom_errorbar(aes(y=avg_super, ymin = avg_super-se_super, ymax = avg_super+se_super)) +
+  facet_wrap(~tattoos) + theme_classic() +
+  ggtitle('Average Probability of Becoming an NBA Superstar') +
+  scale_fill_brewer(palette='Set3')
+```
+
+
+In this plot, we can see that the average probability of becoming a superstar for players that do not have any tattos is much more diverse across positions than players that have tattoos. In the no tattoos group, the average probability of a center becoming a superstar is much lower than anything seen in the tattoo group, but the average probability of a shooting guard becoming a superstar is much higher than anythinng seen in the tattoo group. The average superstar score across positions is relatively even in the tattoo group, but more diverse in the no tattoo group.
+
+
+```{r}
+tatdraft %>% group_by(tattoos,role_player,position) %>% 
+  ggplot(aes(tatdraft, x=tattoos,y=role_player)) + geom_boxplot() +
+  geom_jitter(alpha=.4,size=1,aes(color=tattoos),show.legend = F) +
+  facet_wrap(~position) +
+  scale_y_continuous(breaks=seq(0, 0.6, 0.05)) +
+  ggtitle('Projections to Become a Role Player') +
+  theme_test() +
+  scale_color_brewer(palette='Set1')
+```
+
+
+An interesting takeway from this plot is that when grouping by position, players with tattoos were more likely to have outlier statistics with regards to their probabilites of becoming role players. From the plots, you can see that there are three positions where the tattoo group has observarions that appear below the range that we expect. However, there is only one position where the no tattoo group has observations that appear below the range that we expect. This tells us that players with tattoos on average have role player statistics that are higher and more condensed.
+
+
+```{r}
+tatdraft %>% group_by(draft_year) %>% ggplot(aes(tatdraft,x=starter,y=bust,color=position)) +
+  geom_point(show.legend = F) +
+  facet_wrap(~position) +
+  scale_y_continuous(breaks=seq(0, 1, 0.1)) +
+  ggtitle('Probability of Bust vs. Probability of Starter') +
+  scale_color_brewer(palette = 'Dark2') +
+  theme_light()
+```
+
+
+This plot illustrates an obvious point. For all positions, as a player's probability of becoming a starter increases, their probability of becoming a bust decreases. This makes sense because good players are the ones that successfully become starters in the NBA and bad players are the ones that become busts. The better a player gets, the more likely they will become a starter, and the less likely they will become a bust.
+
+
+```{r}
+tatclust <- tatdraft %>% select(-2:-4,-10)
+tatclust_nums <- tatclust %>% select_if(is.numeric) %>% scale
+rownames(tatclust_nums) <- tatclust$player
+tatpca <-  princomp(tatclust_nums)
+names(tatpca)
+
+summary(tatpca, loadings=T)
+eigval<-tatpca$sdev^2
+varprop=round(eigval/sum(eigval), 2) 
+
+tatdf<-data.frame(PC1=tatpca$scores[, 1], PC2=tatpca$scores[, 2])
+ggplot(tatdf, aes(PC1, PC2)) + geom_point()
+```
+
+
+For this PCA, I found that the first 2 components accounted for about 96% of the variance, so I decided to just use those two. Component 1 separated the good players (superstars and starters) from the bad players (role players and busts). Component 2 separated the extremes of skill level, with superstars and busts increasing in one direction, and starters and role players increasing in the other direction. This created a plot where the players with the highest probability of becoming a superstar were located at the top left, and the players with the highest probability of becoming a bust were located at the top right. The fact that the top right of the plot is the most dense makes a lot of sense. It is much more likely for someone in the NBA draft to become a bust, rather than becoming anything else.
+
+
+```{r}
+player <- tatdraft$player
+
+tatpca$scores %>% as.data.frame %>% cbind(player, .) %>% top_n(3, Comp.1) 
+tatpca$scores %>% as.data.frame %>% cbind(player, .) %>% top_n(3, wt=desc(Comp.1))
+
+tatpca$scores %>% as.data.frame %>% cbind(player, .) %>% top_n(3, Comp.2) 
+tatpca$scores %>% as.data.frame %>% cbind(player, .) %>% top_n(3, wt=desc(Comp.2))
+```
+
+
+The players that scored highest in PC1 were Jerome Jordan, Gary Forbes, and Louis Amundson (the bad player side).
+The players that scored lowest in PC1 were Tyreke Evans, Chris Paul, and Shane Battier (the good player side).

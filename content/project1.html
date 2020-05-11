@@ -1,0 +1,299 @@
+---
+title: "NBA Statistics"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+
+<pre class="r"><code>library(fivethirtyeight)</code></pre>
+<pre><code>## Warning: package &#39;fivethirtyeight&#39; was built under R version 3.6.3</code></pre>
+<pre class="r"><code>library(tidyverse)</code></pre>
+<pre><code>## -- Attaching packages ----------------------- tidyverse 1.3.0 --</code></pre>
+<pre><code>## v ggplot2 3.2.1     v purrr   0.3.3
+## v tibble  2.1.3     v dplyr   0.8.3
+## v tidyr   1.0.2     v stringr 1.4.0
+## v readr   1.3.1     v forcats 0.4.0</code></pre>
+<pre><code>## -- Conflicts -------------------------- tidyverse_conflicts() --
+## x dplyr::filter() masks stats::filter()
+## x dplyr::lag()    masks stats::lag()</code></pre>
+<pre class="r"><code>library(ggplot2)
+library(cluster)
+
+tat &lt;-nba_tattoos
+draft &lt;- nba_draft_2015</code></pre>
+<p>For this project, I chose two datasets from the fivethirtyeight r package. My first dataset is called ‘nba_tattoos’ and it contains the names of 636 NBA players and whether or not they have tattoos on their bodies. The other dataset is called ‘nba_draft_2015’ and it contains the names of players that have been selected in the NBA draft from 2001 to 2015. It also contains statistics about the projected success of the players at the time, giving the probababilites that each player would become a superstar, a starter, a role player, and a bust. It also gives their projected plus/minus (spm) for the first few years of each player’s career, which is essentially a statistic that tells you how effective that player is on the court. I decided to go with these datasets because basketball is my favorite sport and I follow the NBA very closely. I dont have any predictions going into this, but I’m excited to see if there are any associations relating projected skill level and tattoos.</p>
+<pre class="r"><code>tat &lt;- tat %&gt;% pivot_wider(names_from = &#39;player_name&#39;,values_from = &#39;tattoos&#39;)
+tat &lt;- tat %&gt;% pivot_longer(1:636, names_to = &#39;player_name&#39;, values_to = &#39;tattoos&#39;)
+
+draft &lt;- draft %&gt;% pivot_wider(names_from = &#39;position&#39;, values_from = &#39;projected_spm&#39;)
+draft &lt;-draft %&gt;% pivot_longer(8:12, names_to = &#39;position&#39;, values_to = &#39;projected_spm&#39;) %&gt;% 
+  na.omit() %&gt;% select(player, position, everything())</code></pre>
+<p>The datasets that I am using were already in a tidy format, so I decided to untidy them, and then tidy them again. For the ‘tat’ dataset, I used pivot_wider() to give each player their own column, and then used pivot_longer() to lengthen the dataset to its original format. For the ‘draft’ dataset, I used pivot_wider() to make a column for each position. Doing this created a lot of NAs, so when tidying the dataset, I had to use na.omit() to get rid of the NAs, and select() to rearrange my columns to the order they were in originally.</p>
+<pre class="r"><code>tatdraft &lt;- inner_join(draft,tat,by=c(&#39;player&#39;=&#39;player_name&#39;))</code></pre>
+<p>My overall goal of this project is to see whether there is a relationship between having a tattoo and projected skill level. Because of this, I decided to use inner_join(), which keeps only the basketball players that appear in both datasets. Doing any other type of join would make no sense, because it would leave me with a combined dataset that contains players that I either don’t know their projected skill level, or don’t know whether or not they have tattoos. Doing this join got rid of 937 obervations, and left me with 396 observations, which is still a good size for this analysis.</p>
+<pre class="r"><code>tatdraft %&gt;% filter(position == &#39;SG&#39; &amp; projected_spm &gt; 1) %&gt;% arrange(desc(projected_spm))</code></pre>
+<pre><code>## # A tibble: 2 x 10
+##   player position id    draft_year superstar starter role_player  bust
+##   &lt;chr&gt;  &lt;chr&gt;    &lt;chr&gt;      &lt;int&gt;     &lt;dbl&gt;   &lt;dbl&gt;       &lt;dbl&gt; &lt;dbl&gt;
+## 1 Victo~ SG       vict~       2013     0.160   0.429       0.175 0.236
+## 2 Bradl~ SG       brad~       2012     0.133   0.492       0.137 0.238
+## # ... with 2 more variables: projected_spm &lt;dbl&gt;, tattoos &lt;lgl&gt;</code></pre>
+<pre class="r"><code>tatdraft %&gt;% mutate(years_ex = 2020-draft_year) %&gt;% select(1,5:11)</code></pre>
+<pre><code>## # A tibble: 396 x 8
+##    player     superstar starter role_player  bust projected_spm tattoos years_ex
+##    &lt;chr&gt;          &lt;dbl&gt;   &lt;dbl&gt;       &lt;dbl&gt; &lt;dbl&gt;         &lt;dbl&gt; &lt;lgl&gt;      &lt;dbl&gt;
+##  1 Josh Smith  0         0.0268       0.382 0.591      -1.19    TRUE           5
+##  2 Marcus Th~  0.000489  0.0216       0.390 0.588      -1.20    TRUE           5
+##  3 Victor Ol~  0.160     0.429        0.175 0.236       1.21    FALSE          7
+##  4 Otto Port~  0.112     0.500        0.128 0.261       1.03    FALSE          7
+##  5 Alex Len    0.0714    0.401        0.246 0.282       0.555   FALSE          7
+##  6 Anthony B~  0.0659    0.387        0.203 0.344       0.338   TRUE           7
+##  7 Ben McLem~  0.0575    0.405        0.188 0.350       0.324   TRUE           7
+##  8 Cody Zell~  0.0162    0.356        0.375 0.253       0.238   FALSE          7
+##  9 Michael C~  0.0315    0.314        0.269 0.385       0.0241  FALSE          7
+## 10 Kentaviou~  0.0314    0.322        0.263 0.384       0.00346 TRUE           7
+## # ... with 386 more rows</code></pre>
+<pre class="r"><code>tatdraft %&gt;% group_by(tattoos) %&gt;% summarize(mean_spm = mean(projected_spm)) </code></pre>
+<pre><code>## # A tibble: 2 x 2
+##   tattoos mean_spm
+##   &lt;lgl&gt;      &lt;dbl&gt;
+## 1 FALSE     -0.514
+## 2 TRUE      -0.484</code></pre>
+<p>In this section, I used the filter and arrange functions to find out which shooting guards had projected spm’s of over 1. I found that the only two players in this dataset that met this criteria were Victor Oladipo and Bradley Beal, which makes sense considering they currently are both doing very well in the NBA. Next, I created another variable called ‘years_ex’ which tells us how many years each player has been in the NBA. I also grouped by ‘tattoos’ and found the mean spm value for each group to see if there is a difference in prospective talent among people that have tattoos and people that don’t. It turns out that people who have tattoos have a slight edge in mean spm value, but not by very much at all.</p>
+<pre class="r"><code>#superstar
+tatdraft %&gt;% summarize(mean(superstar))</code></pre>
+<pre><code>## # A tibble: 1 x 1
+##   `mean(superstar)`
+##               &lt;dbl&gt;
+## 1            0.0218</code></pre>
+<pre class="r"><code>tatdraft %&gt;% group_by(position) %&gt;% summarize(mean(superstar))</code></pre>
+<pre><code>## # A tibble: 5 x 2
+##   position `mean(superstar)`
+##   &lt;chr&gt;                &lt;dbl&gt;
+## 1 C                   0.0159
+## 2 PF                  0.0213
+## 3 PG                  0.0258
+## 4 SF                  0.0185
+## 5 SG                  0.0252</code></pre>
+<pre class="r"><code>#projected_spm
+tatdraft %&gt;% summarize(var(projected_spm))</code></pre>
+<pre><code>## # A tibble: 1 x 1
+##   `var(projected_spm)`
+##                  &lt;dbl&gt;
+## 1                0.411</code></pre>
+<pre class="r"><code>tatdraft %&gt;% group_by(draft_year,position) %&gt;% summarize(sd_spm=sd(projected_spm)) %&gt;% 
+  na.omit() %&gt;% arrange(desc(sd_spm))</code></pre>
+<pre><code>## # A tibble: 62 x 3
+## # Groups:   draft_year [13]
+##    draft_year position sd_spm
+##         &lt;int&gt; &lt;chr&gt;     &lt;dbl&gt;
+##  1       2003 C         1.34 
+##  2       2002 PG        1.25 
+##  3       2001 SG        1.06 
+##  4       2005 PG        0.996
+##  5       2001 SF        0.970
+##  6       2009 C         0.915
+##  7       2006 PF        0.915
+##  8       2012 PF        0.893
+##  9       2005 SF        0.873
+## 10       2003 SG        0.799
+## # ... with 52 more rows</code></pre>
+<pre class="r"><code>#draft_year
+tatdraft %&gt;% summarize(n_distinct(draft_year))</code></pre>
+<pre><code>## # A tibble: 1 x 1
+##   `n_distinct(draft_year)`
+##                      &lt;int&gt;
+## 1                       14</code></pre>
+<pre class="r"><code>tatdraft %&gt;% group_by(tattoos) %&gt;% summarize(n_distinct(draft_year))</code></pre>
+<pre><code>## # A tibble: 2 x 2
+##   tattoos `n_distinct(draft_year)`
+##   &lt;lgl&gt;                      &lt;int&gt;
+## 1 FALSE                         13
+## 2 TRUE                          14</code></pre>
+<pre class="r"><code>#starter
+tatdraft %&gt;% summarize(min(starter))</code></pre>
+<pre><code>## # A tibble: 1 x 1
+##   `min(starter)`
+##            &lt;dbl&gt;
+## 1        0.00583</code></pre>
+<pre class="r"><code>tatdraft %&gt;% summarize(max(starter))</code></pre>
+<pre><code>## # A tibble: 1 x 1
+##   `max(starter)`
+##            &lt;dbl&gt;
+## 1          0.656</code></pre>
+<pre class="r"><code>tatdraft %&gt;% group_by(position) %&gt;% summarize(min(starter))</code></pre>
+<pre><code>## # A tibble: 5 x 2
+##   position `min(starter)`
+##   &lt;chr&gt;             &lt;dbl&gt;
+## 1 C               0.0171 
+## 2 PF              0.0101 
+## 3 PG              0.0235 
+## 4 SF              0.00583
+## 5 SG              0.0166</code></pre>
+<pre class="r"><code>#role_player
+tatdraft %&gt;% summarize(mad(role_player))</code></pre>
+<pre><code>## # A tibble: 1 x 1
+##   `mad(role_player)`
+##                &lt;dbl&gt;
+## 1             0.0742</code></pre>
+<pre class="r"><code>tatdraft %&gt;% group_by(draft_year) %&gt;% summarize(mad(role_player))</code></pre>
+<pre><code>## # A tibble: 14 x 2
+##    draft_year `mad(role_player)`
+##         &lt;int&gt;              &lt;dbl&gt;
+##  1       2001            0.0599 
+##  2       2002            0.0711 
+##  3       2003            0.0770 
+##  4       2004            0.130  
+##  5       2005            0.0820 
+##  6       2006            0.120  
+##  7       2007            0.0754 
+##  8       2008            0.0989 
+##  9       2009            0.0704 
+## 10       2010            0.0526 
+## 11       2011            0.0601 
+## 12       2012            0.0634 
+## 13       2013            0.0525 
+## 14       2015            0.00570</code></pre>
+<pre class="r"><code>#bust
+tatdraft %&gt;% summarize(IQR(bust))</code></pre>
+<pre><code>## # A tibble: 1 x 1
+##   `IQR(bust)`
+##         &lt;dbl&gt;
+## 1       0.170</code></pre>
+<pre class="r"><code>tatdraft %&gt;% group_by(position,draft_year) %&gt;% summarize(IQR(bust))</code></pre>
+<pre><code>## # A tibble: 66 x 3
+## # Groups:   position [5]
+##    position draft_year `IQR(bust)`
+##    &lt;chr&gt;         &lt;int&gt;       &lt;dbl&gt;
+##  1 C              2001      0.0320
+##  2 C              2002      0     
+##  3 C              2003      0.231 
+##  4 C              2005      0.0129
+##  5 C              2006      0.131 
+##  6 C              2007      0.130 
+##  7 C              2008      0.0569
+##  8 C              2009      0.149 
+##  9 C              2010      0.186 
+## 10 C              2011      0.0517
+## # ... with 56 more rows</code></pre>
+<pre class="r"><code>tatdraft %&gt;% group_by(tattoos) %&gt;% summarize(n()) </code></pre>
+<pre><code>## # A tibble: 2 x 2
+##   tattoos `n()`
+##   &lt;lgl&gt;   &lt;int&gt;
+## 1 FALSE     174
+## 2 TRUE      222</code></pre>
+<pre class="r"><code>#matrix
+tatdraft %&gt;% select_if(is.numeric) %&gt;% na.omit %&gt;% cor</code></pre>
+<pre><code>##                draft_year   superstar    starter role_player       bust
+## draft_year     1.00000000 -0.04456289 -0.1151020   0.0523067  0.1088753
+## superstar     -0.04456289  1.00000000  0.7460656  -0.7964630 -0.5656733
+## starter       -0.11510201  0.74606564  1.0000000  -0.6973122 -0.8652181
+## role_player    0.05230670 -0.79646296 -0.6973122   1.0000000  0.2690131
+## bust           0.10887529 -0.56567332 -0.8652181   0.2690131  1.0000000
+## projected_spm -0.08604060  0.84585894  0.9663763  -0.6663438 -0.8847026
+##               projected_spm
+## draft_year       -0.0860406
+## superstar         0.8458589
+## starter           0.9663763
+## role_player      -0.6663438
+## bust             -0.8847026
+## projected_spm     1.0000000</code></pre>
+<p>There were a few interesting things I found within my summary statistics. I found that point guards and shooting guards were more likely to become superstars, while centers were the least likely. I found that centers in 2003 had the highest variance in projected spm for the beginning of their careers. Another statistic that I found about 2003 was that it was the year that had the highest IQR for the probability that a player would become a bust. This analysis shows that overall, 2003 was the draft class that was most variable in skill level.</p>
+<p>The most interesting observation I found in my correlation matrix is that there is a greater positive correlation between ‘projected_spm’ and ‘starter’ than ‘projected_spm’ and ‘superstar’. This is something that I did not expect at all. You would think that as a player’s projected spm increases, their liklihood of becoming a superstar would be the most correlated statistic. This shows us that the players that are projected to be superstars don’t neccessarily have the highest projected spm.</p>
+<pre class="r"><code>tatdraft_cor &lt;- tatdraft %&gt;% select_if(is.numeric) %&gt;% na.omit %&gt;% cor %&gt;%
+  as.data.frame() %&gt;% rownames_to_column() %&gt;%
+  pivot_longer(-1, names_to = &#39;name&#39;, values_to = &#39;correlation&#39;)
+
+tatdraft_cor %&gt;% ggplot(aes(rowname, name, fill=correlation)) + geom_tile() +
+  scale_fill_gradient2(low=&quot;red&quot;,mid=&quot;white&quot;,high=&quot;blue&quot;) +
+  geom_text(aes(label=round(correlation,2)),color = &quot;black&quot;, size = 4) +
+  theme(axis.text.x = element_text(angle = 90, hjust=1)) +
+  xlab(&quot;&quot;)+ylab(&quot;&quot;)</code></pre>
+<p><img src="/project1_files/figure-html/unnamed-chunk-6-1.png" width="672" /></p>
+<p>This correlation heatmap shows us that projected spm is positively correlated with starter and superstar, but negatively correlated with role player and bust, which is exactly what you would expect. An interesting interaction that I didnt expect is that draft year has a slight positive correlation with role player and bust, and a slight negative correlation with starter and superstar. This means that as time has passed, players have been increasingly projected to not be successful in the NBA.</p>
+<pre class="r"><code>tatdraft %&gt;% group_by(position,tattoos) %&gt;% 
+  summarize(avg_super = mean(superstar),sd_super=sd(superstar, na.rm=T), n=n(),
+se_super=sd_super/sqrt(n)) %&gt;%
+  ggplot(aes(position, avg_super, fill=position)) +
+  geom_bar(stat=&#39;summary&#39;,show.legend = F) +
+  geom_errorbar(aes(y=avg_super, ymin = avg_super-se_super, ymax = avg_super+se_super)) +
+  facet_wrap(~tattoos) + theme_classic() +
+  ggtitle(&#39;Average Probability of Becoming an NBA Superstar&#39;) +
+  scale_fill_brewer(palette=&#39;Set3&#39;)</code></pre>
+<pre><code>## Warning: Ignoring unknown aesthetics: y</code></pre>
+<pre><code>## No summary function supplied, defaulting to `mean_se()
+## No summary function supplied, defaulting to `mean_se()</code></pre>
+<p><img src="/project1_files/figure-html/unnamed-chunk-7-1.png" width="672" /></p>
+<p>In this plot, we can see that the average probability of becoming a superstar for players that do not have any tattos is much more diverse across positions than players that have tattoos. In the no tattoos group, the average probability of a center becoming a superstar is much lower than anything seen in the tattoo group, but the average probability of a shooting guard becoming a superstar is much higher than anythinng seen in the tattoo group. The average superstar score across positions is relatively even in the tattoo group, but more diverse in the no tattoo group.</p>
+<pre class="r"><code>tatdraft %&gt;% group_by(tattoos,role_player,position) %&gt;% 
+  ggplot(aes(tatdraft, x=tattoos,y=role_player)) + geom_boxplot() +
+  geom_jitter(alpha=.4,size=1,aes(color=tattoos),show.legend = F) +
+  facet_wrap(~position) +
+  scale_y_continuous(breaks=seq(0, 0.6, 0.05)) +
+  ggtitle(&#39;Projections to Become a Role Player&#39;) +
+  theme_test() +
+  scale_color_brewer(palette=&#39;Set1&#39;)</code></pre>
+<p><img src="/project1_files/figure-html/unnamed-chunk-8-1.png" width="672" /></p>
+<p>An interesting takeway from this plot is that when grouping by position, players with tattoos were more likely to have outlier statistics with regards to their probabilites of becoming role players. From the plots, you can see that there are three positions where the tattoo group has observarions that appear below the range that we expect. However, there is only one position where the no tattoo group has observations that appear below the range that we expect. This tells us that players with tattoos on average have role player statistics that are higher and more condensed.</p>
+<pre class="r"><code>tatdraft %&gt;% group_by(draft_year) %&gt;% ggplot(aes(tatdraft,x=starter,y=bust,color=position)) +
+  geom_point(show.legend = F) +
+  facet_wrap(~position) +
+  scale_y_continuous(breaks=seq(0, 1, 0.1)) +
+  ggtitle(&#39;Probability of Bust vs. Probability of Starter&#39;) +
+  scale_color_brewer(palette = &#39;Dark2&#39;) +
+  theme_light()</code></pre>
+<p><img src="/project1_files/figure-html/unnamed-chunk-9-1.png" width="672" /></p>
+<p>This plot illustrates an obvious point. For all positions, as a player’s probability of becoming a starter increases, their probability of becoming a bust decreases. This makes sense because good players are the ones that successfully become starters in the NBA and bad players are the ones that become busts. The better a player gets, the more likely they will become a starter, and the less likely they will become a bust.</p>
+<pre class="r"><code>tatclust &lt;- tatdraft %&gt;% select(-2:-4,-10)
+tatclust_nums &lt;- tatclust %&gt;% select_if(is.numeric) %&gt;% scale
+rownames(tatclust_nums) &lt;- tatclust$player
+tatpca &lt;-  princomp(tatclust_nums)
+names(tatpca)</code></pre>
+<pre><code>## [1] &quot;sdev&quot;     &quot;loadings&quot; &quot;center&quot;   &quot;scale&quot;    &quot;n.obs&quot;    &quot;scores&quot;   &quot;call&quot;</code></pre>
+<pre class="r"><code>summary(tatpca, loadings=T)</code></pre>
+<pre><code>## Importance of components:
+##                           Comp.1    Comp.2     Comp.3      Comp.4 Comp.5
+## Standard deviation     1.9865824 0.9112055 0.45117963 0.083698339      0
+## Proportion of Variance 0.7913002 0.1664795 0.04081568 0.001404629      0
+## Cumulative Proportion  0.7913002 0.9577797 0.99859537 1.000000000      1
+## 
+## Loadings:
+##               Comp.1 Comp.2 Comp.3 Comp.4 Comp.5
+## superstar      0.447  0.324  0.771  0.256  0.188
+## starter        0.486 -0.148 -0.474  0.276  0.664
+## role_player   -0.384 -0.675  0.420         0.463
+## bust          -0.411  0.629        -0.352  0.556
+## projected_spm  0.497 -0.149        -0.853</code></pre>
+<pre class="r"><code>eigval&lt;-tatpca$sdev^2
+varprop=round(eigval/sum(eigval), 2) 
+
+tatdf&lt;-data.frame(PC1=tatpca$scores[, 1], PC2=tatpca$scores[, 2])
+ggplot(tatdf, aes(PC1, PC2)) + geom_point()</code></pre>
+<p><img src="/project1_files/figure-html/unnamed-chunk-10-1.png" width="672" /></p>
+<p>For this PCA, I found that the first 2 components accounted for about 96% of the variance, so I decided to just use those two. Component 1 separated the good players (superstars and starters) from the bad players (role players and busts). Component 2 separated the extremes of skill level, with superstars and busts increasing in one direction, and starters and role players increasing in the other direction. This created a plot where the players with the highest probability of becoming a superstar were located at the top left, and the players with the highest probability of becoming a bust were located at the top right. The fact that the top right of the plot is the most dense makes a lot of sense. It is much more likely for someone in the NBA draft to become a bust, rather than becoming anything else.</p>
+<pre class="r"><code>player &lt;- tatdraft$player
+
+tatpca$scores %&gt;% as.data.frame %&gt;% cbind(player, .) %&gt;% top_n(3, Comp.1) </code></pre>
+<pre><code>##          player   Comp.1     Comp.2    Comp.3      Comp.4        Comp.5
+## 1  Tyreke Evans 5.834458  1.2506256  1.363600  0.04888012  4.082487e-09
+## 2    Chris Paul 6.081106  1.0252267  1.036444 -0.25050569 -5.995938e-10
+## 3 Shane Battier 5.989112 -0.6765082 -1.415536 -0.65077857 -4.289184e-09</code></pre>
+<pre class="r"><code>tatpca$scores %&gt;% as.data.frame %&gt;% cbind(player, .) %&gt;% top_n(3, wt=desc(Comp.1))</code></pre>
+<pre><code>##           player    Comp.1   Comp.2     Comp.3      Comp.4        Comp.5
+## 1  Jerome Jordan -2.375201 2.541425 -0.4417463 -0.01961728  4.380082e-09
+## 2    Gary Forbes -2.504552 2.363391 -0.2929878 -0.01589363 -6.462094e-10
+## 3 Louis Amundson -2.457944 2.599007 -0.4075831 -0.05086215  4.381353e-09</code></pre>
+<pre class="r"><code>tatpca$scores %&gt;% as.data.frame %&gt;% cbind(player, .) %&gt;% top_n(3, Comp.2) </code></pre>
+<pre><code>##           player    Comp.1   Comp.2     Comp.3      Comp.4        Comp.5
+## 1  Jerome Jordan -2.375201 2.541425 -0.4417463 -0.01961728  4.380082e-09
+## 2 Louis Amundson -2.457944 2.599007 -0.4075831 -0.05086215  4.381353e-09
+## 3    Earl Barron -2.366024 2.515763 -0.4291941 -0.04088371 -5.681948e-09</code></pre>
+<pre class="r"><code>tatpca$scores %&gt;% as.data.frame %&gt;% cbind(player, .) %&gt;% top_n(3, wt=desc(Comp.2))</code></pre>
+<pre><code>##           player     Comp.1    Comp.2    Comp.3       Comp.4       Comp.5
+## 1 Brandan Wright  0.9924382 -2.270650 0.0109958  0.029286019 4.604723e-10
+## 2 Kris Humphries  0.8008060 -2.341289 0.1287282 -0.001205905 4.796620e-10
+## 3   Chris Wilcox -0.2494408 -2.411773 0.5806093  0.019170757 5.442224e-09</code></pre>
+<p>The players that scored highest in PC1 were Jerome Jordan, Gary Forbes, and Louis Amundson (the bad player side).
+The players that scored lowest in PC1 were Tyreke Evans, Chris Paul, and Shane Battier (the good player side).</p>
