@@ -1,13 +1,12 @@
 ---
 title: Blog
 author: Aaron Perez
-date: '2020-05-11'
+date: '2020-05-13'
 slug: blog
 categories: []
 tags: []
 description: ''
 ---
-
 ```{r}
 library(reticulate)
 ```
@@ -29,7 +28,3 @@ height <- 5
 ```{python}
 r.length*width*r.height
 ```
-
-
-
-
