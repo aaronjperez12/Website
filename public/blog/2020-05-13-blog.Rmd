@@ -1,5 +1,5 @@
 ---
-title: Blog
+title: Area of a Rectangular Prism
 author: Aaron Perez
 date: '2020-05-13'
 slug: blog
@@ -11,19 +11,21 @@ description: ''
 library(reticulate)
 ```
 
-![](/blog/2020-05-11-blog_files/rec.1)
+![](/blog/2020-05-13-blog_files/volume06.gif)
 
 ```{r}
-length <- 21
+length <- 12
 ```
 
 ```{python}
-width=14
+width=6
 ```
 
 ```{r}
-height <- 5
+height <- 8
 ```
+
+Area:
 
 ```{python}
 r.length*width*r.height

@@ -21,6 +21,7 @@ theme = "hugo-sustain"
 
 [params.social]
   Email         = "perez_aaron2@yahoo.com"
+  Linkedin      = "https://www.linkedin.com/in/aaron-perez-482ab11a4/"
 
 ## Main Menu
 [[menu.main]]
@@ -37,4 +38,4 @@ theme = "hugo-sustain"
   name = "resume"
   identifier = "resume"
   weight = 300
-  url = "/resume/"
+  url = "/CV2020.pdf"

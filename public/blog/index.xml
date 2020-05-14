@@ -12,12 +12,13 @@
     
     
     <item>
-      <title>Blog</title>
+      <title>Area of a Rectangular Prism</title>
       <link>/blog/blog/</link>
       <pubDate>Wed, 13 May 2020 00:00:00 +0000</pubDate>
       
       <guid>/blog/blog/</guid>
-      <description>library(reticulate)## Warning: package &amp;#39;reticulate&amp;#39; was built under R version 3.6.3length &amp;lt;- 21width=14height &amp;lt;- 5r.length*width*r.height## 1470.0</description>
+      <description>library(reticulate)## Warning: package &amp;#39;reticulate&amp;#39; was built under R version 3.6.3length &amp;lt;- 12width=6height &amp;lt;- 8Area:
+r.length*width*r.height## 576.0</description>
     </item>
     
   </channel>
